@@ -87,6 +87,52 @@ contract CampaignFund is Ownable, ERC223ReceivingContract {
         return (ERC20(tokenAddress).balanceOf(this));
     }
 
+    function pay(address _to, uint256 _amount) onlyOwner {
+      require(Registry.isPayee(_to));
+      uint _transactionId = transactionIdx++;
+      Transaction memory transaction;
+      transaction.from = msg.sender;
+      transaction.to = _to;
+      transaction.amount = _amount;
+      transaction.signatureCount = 0;
+
+      _transactions[_transactionId] = transaction;
+      _pendingTransactions.push(transactionId);
+      transactionCreated(this, _to, _amount, now);
+    }
+
+    function getPendingTransactions()
+      view
+      validOwner
+      public
+      returns (uint[]) {
+      return _pendingTransactions;
+    }
+
+
+    function signTransaction(uint transactionId)
+      validOwner
+      public {
+
+      Transaction storage transaction = _transactions[transactionId];
+
+      // Transaction must exist
+      require(0x0 != transaction.from);
+      // Creator cannot sign the transaction
+      require(msg.sender != transaction.from);
+      // Cannot sign a transaction more than once
+      require(transaction.signatures[msg.sender] != 1);
+
+      transaction.signatures[msg.sender] = 1;
+      transaction.signatureCount++;
+
+      TransactionSigned(msg.sender, transactionId);
+
+      if (transaction.signatureCount >= MIN_SIGNATURES) {
+        ERC20(tokenAddress).transfer(transaction.to, _amount);
+        TransactionCompleted(transaction.from, transaction.to, transaction.amount, transactionId,now);
+      }
+    }
 
 
     /**********
